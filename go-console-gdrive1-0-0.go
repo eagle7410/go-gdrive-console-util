@@ -72,6 +72,11 @@ func saveToken(path string, token *oauth2.Token) {
 }
 
 func main() {
+	params := os.Args[1:]
+
+	for _, p := range params {
+		fmt.Printf("Param is %s\n", p)
+	}
 
 	b, err := ioutil.ReadFile(googleSecretPath + "credentials.json")
 
