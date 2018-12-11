@@ -14,7 +14,9 @@ import (
 	"google.golang.org/api/drive/v3"
 )
 
-var googleSecretPath string = "../gsecret/"
+var (
+	googleSecretPath string = "../gsecret/"
+)
 
 // Retrieve a token, saves the token, then returns the generated client.
 func getClient(config *oauth2.Config) *http.Client {
@@ -72,12 +74,26 @@ func saveToken(path string, token *oauth2.Token) {
 }
 
 func main() {
+	var command string
 	params := os.Args[1:]
 
 	for inx := range params {
-		fmt.Printf("Param is %s\n", params[inx])
+		switch params[inx] {
+		case "-c":
+			command = params[inx+1]
+		}
 	}
 
+	switch command {
+	case "fileList":
+		filesList()
+	default:
+		log.Fatalf("Command %v not allowed \n", command)
+	}
+
+}
+
+func filesList() {
 	b, err := ioutil.ReadFile(googleSecretPath + "credentials.json")
 
 	if err != nil {
@@ -87,6 +103,7 @@ func main() {
 	// If modifying these scopes, delete your previously saved token.json.
 
 	config, err := google.ConfigFromJSON(b, drive.DriveScope)
+
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
