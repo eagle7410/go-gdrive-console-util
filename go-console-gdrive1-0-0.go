@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -74,17 +76,28 @@ func saveToken(path string, token *oauth2.Token) {
 }
 
 func main() {
-	var command string
+	var command, file, id string
 	params := os.Args[1:]
 
 	for inx := range params {
+
 		switch params[inx] {
+		case "-id":
+			id = params[inx+1]
+		case "-f":
+			file = params[inx+1]
 		case "-c":
 			command = params[inx+1]
 		}
 	}
 
 	switch command {
+	case "fileGet":
+		fileGet(&file, &id)
+	case "fileUpdate":
+		fileUpdateCloud(&file, &id)
+	case "fileCreate":
+		fileCreateCloud(&file)
 	case "fileList":
 		filesList()
 	default:
@@ -92,8 +105,7 @@ func main() {
 	}
 
 }
-
-func filesList() {
+func initCloud() *drive.Service {
 	b, err := ioutil.ReadFile(googleSecretPath + "credentials.json")
 
 	if err != nil {
@@ -116,8 +128,106 @@ func filesList() {
 		log.Fatalf("Unable to retrieve Drive client: %v", err)
 	}
 
-	r, err := srv.Files.List().PageSize(10).
-		Fields("nextPageToken, files(id, name)").Do()
+	return srv
+}
+
+func fileGet(fileName, id *string) {
+
+	if len(*fileName) < 1 {
+		log.Fatalf("Unable to retrieve Drive client: %v", "File name is empty")
+	}
+
+	if len(*id) < 1 {
+		log.Fatalf("Unable to retrieve Drive client: %v", "File Id is empty")
+	}
+
+	srv := initCloud()
+
+	res, err := srv.Files.Get(*id).Download()
+
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	out, err := os.Create(*fileName)
+
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	defer out.Close()
+
+	_, err = io.Copy(out, res.Body)
+
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	fmt.Println("Download is ok")
+}
+
+func fileUpdateCloud(fileName, id *string) {
+
+	if len(*fileName) < 1 {
+		log.Fatalf("Unable to retrieve Drive client: %v", "File name is empty")
+	}
+
+	if len(*id) < 1 {
+		log.Fatalf("Unable to retrieve Drive client: %v", "File Id is empty")
+	}
+
+	srv := initCloud()
+
+	file, err := os.Open(*fileName)
+
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	defer file.Close()
+
+	f := &drive.File{Name: filepath.Base(*fileName)}
+
+	res, err := srv.Files.Update(*id, f).Media(file).Do()
+
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	fmt.Printf("%s, %s, %s\n", res.Name, res.Id, res.MimeType)
+}
+
+func fileCreateCloud(fileName *string) {
+	if len(*fileName) < 1 {
+		log.Fatalf("Unable to retrieve Drive client: %v", "File name is empty")
+	}
+
+	srv := initCloud()
+
+	file, err := os.Open(*fileName)
+
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+	defer file.Close()
+
+	f := &drive.File{Name: filepath.Base(*fileName)}
+
+	res, err := srv.Files.Create(f).Media(file).Do()
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	fmt.Printf("%s, %s, %s\n", res.Name, res.Id, res.MimeType)
+}
+
+func filesList() {
+
+	srv := initCloud()
+
+	r, err := srv.Files.List().
+		Do()
+
 	if err != nil {
 		log.Fatalf("Unable to retrieve files: %v", err)
 	}
@@ -126,7 +236,7 @@ func filesList() {
 		fmt.Println("No files found.")
 	} else {
 		for _, i := range r.Files {
-			fmt.Printf("%s (%s)\n", i.Name, i.Id)
+			fmt.Printf("  name -> %s id -> %s \n", i.Name, i.Id)
 		}
 	}
 }
